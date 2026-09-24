@@ -25,3 +25,22 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/monitor
+            git pull origin main
+            docker stop monitor || true
+            docker rm monitor || true
+            docker build -t monitor .
+            docker run -d --name monitor -p 8080:80 monitor
