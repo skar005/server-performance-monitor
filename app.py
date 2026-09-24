@@ -1,36 +1,20 @@
-import sqlite3
 import psutil
 import time
 import threading
 from datetime import datetime, timedelta, timezone
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from apscheduler.schedulers.background import BackgroundScheduler
+
 from alerting import check_threshold
+from database import get_db
 
 app = FastAPI()
 
 THRESHOLDS = {"cpu": 75, "memory": 75, "disk": 90}
+
 _last_net = psutil.net_io_counters()
-
-
-DB_PATH = "metrics.db"
-
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS metrics (
-            timestamp TEXT, cpu REAL, memory REAL, disk REAL,
-            net_sent REAL, net_recv REAL, processes INTEGER
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS alerts (
-            timestamp TEXT, metric TEXT, value REAL, message TEXT
-        )
-    """)
-    return conn
 
 
 def collect_metrics():

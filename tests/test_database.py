@@ -1,14 +1,13 @@
-import sqlite3
-import app
+import database
 
 
 def test_database_creates_tables(tmp_path):
-    original_db_path = app.DB_PATH
+    original_db_path = database.DB_PATH
 
     try:
-        app.DB_PATH = str(tmp_path / "test_metrics.db")
+        database.DB_PATH = str(tmp_path / "test_metrics.db")
 
-        conn = app.get_db()
+        conn = database.get_db()
 
         tables = {
             row[0]
@@ -23,16 +22,16 @@ def test_database_creates_tables(tmp_path):
         assert "alerts" in tables
 
     finally:
-        app.DB_PATH = original_db_path
+        database.DB_PATH = original_db_path
 
 
 def test_metric_can_be_stored(tmp_path):
-    original_db_path = app.DB_PATH
+    original_db_path = database.DB_PATH
 
     try:
-        app.DB_PATH = str(tmp_path / "test_metrics.db")
+        database.DB_PATH = str(tmp_path / "test_metrics.db")
 
-        conn = app.get_db()
+        conn = database.get_db()
 
         conn.execute(
             """
@@ -52,4 +51,4 @@ def test_metric_can_be_stored(tmp_path):
         assert row == (50.0, 40.0, 20.0, 10)
 
     finally:
-        app.DB_PATH = original_db_path
+        database.DB_PATH = original_db_path
