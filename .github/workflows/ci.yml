@@ -24,4 +24,4 @@ jobs:
           pip install pytest httpx2
 
       - name: Run tests
-        run: pytest -v
+        run: python -m pytest -v
