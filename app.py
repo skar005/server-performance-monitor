@@ -152,7 +152,7 @@ def get_alerts():
     conn = get_db()
 
     rows = conn.execute(
-        "SELECT timestamp, message "
+        "SELECT timestamp, metric, value, message "
         "FROM alerts ORDER BY timestamp DESC LIMIT 10"
     ).fetchall()
 
@@ -161,7 +161,9 @@ def get_alerts():
     return JSONResponse([
         {
             "timestamp": r[0],
-            "message": r[1]
+            "metric": r[1],
+            "value": r[2],
+            "message": r[3]
         }
         for r in rows
     ])
