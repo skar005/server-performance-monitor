@@ -16,3 +16,8 @@ def check_threshold(metric, value):
         }
 
     return None
+
+
+def is_healthy(cpu, memory, disk):
+    readings = (("cpu", cpu), ("memory", memory), ("disk", disk))
+    return all(check_threshold(metric, value) is None for metric, value in readings)

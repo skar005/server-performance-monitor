@@ -7,12 +7,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from alerting import check_threshold
+from alerting import THRESHOLDS, check_threshold, is_healthy
 from database import get_db
 
 app = FastAPI()
-
-THRESHOLDS = {"cpu": 75, "memory": 75, "disk": 90}
 
 _last_net = psutil.net_io_counters()
 
@@ -131,11 +129,7 @@ def get_status():
 
     cpu, memory, disk, processes = row
 
-    healthy = (
-        cpu < THRESHOLDS["cpu"]
-        and memory < THRESHOLDS["memory"]
-        and disk < THRESHOLDS["disk"]
-    )
+    healthy = is_healthy(cpu, memory, disk)
 
     return JSONResponse({
         "status": "healthy" if healthy else "warning",
