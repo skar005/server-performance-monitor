@@ -43,4 +43,4 @@ jobs:
             docker stop monitor || true
             docker rm monitor || true
             docker build -t monitor .
-            docker run -d --name monitor -p 8080:80 monitor
+            docker run -d --name monitor --restart unless-stopped -p 8080:80 -v monitor-data:/data monitor

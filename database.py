@@ -1,6 +1,7 @@
+import os
 import sqlite3
 
-DB_PATH = "metrics.db"
+DB_PATH = os.environ.get("MONITOR_DB_PATH", "metrics.db")
 
 
 def get_db():
