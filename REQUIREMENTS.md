@@ -24,9 +24,10 @@ web interface.
 | REQ-011 | The system shall present current status, a history chart and recent alerts on a web dashboard that refreshes every 5 seconds. |
 | REQ-012 | The system shall provide CPU and memory load simulation, each lasting 20 seconds, for demonstration and testing. |
 | REQ-013 | The system shall collect a measurement every 15 seconds. |
-| REQ-014 | The system shall record the process count and network bytes sent and received with every measurement. |
+| REQ-014 | The system shall record the process count and network bytes sent and received, as seen from inside the monitoring container, with every measurement. |
 | REQ-015 | Status classification and alerting shall apply the same thresholds and the same comparison rule, including at exactly the threshold value. |
 | REQ-016 | The system shall return the 10 most recent alerts, each with timestamp, metric, value and message. |
+| REQ-017 | The system shall report the scope (host or container) of every measurement, and shall not present a container-scoped value as a host value. |
 
 ## 3. Non-Functional Requirements
 
@@ -64,6 +65,7 @@ implemented, awaiting demonstration on the deployed system.
 | REQ-014 | Inspection | Columns in schema; stored in `test_metric_can_be_stored` | Partial |
 | REQ-015 | Test | `test_status_agrees_with_alerting_rule` (six boundary cases) | Verified |
 | REQ-016 | Test | `test_alerts_endpoint_returns_full_alert_record` and `test_alerts_endpoint`; 10-row limit untested | Partial |
+| REQ-017 | Test | `test_status_declares_scope_of_each_measurement` checks the API; `test_dashboard_labels_process_count_with_its_scope` checks the label in the page source, not the rendered page | Partial |
 | NFR-001 | Inspection | `database.py` uses a SQLite file | Verified |
 | NFR-002 | Test / inspection | Single definition verified by `test_thresholds_are_defined_in_one_place`; still changed by editing `alerting.py`, not externally configurable | Partial |
 | NFR-003 | Test | `tests/conftest.py` redirects to a temporary database; `test_tests_do_not_use_the_working_directory_database` | Verified |
@@ -81,6 +83,7 @@ implemented, awaiting demonstration on the deployed system.
 | D2 | `/api/alerts` dropped metric and value; its test passed only because the table was empty | Endpoint returns the full record; new test seeds an alert | 6d97ca3 |
 | D3 | Tests wrote to the working-directory database | `tests/conftest.py` redirects to a temporary database | acb62e3 |
 | D4 | Redeploy deleted measurement history; no restart after host reboot | Configurable database path, `monitor-data` volume, restart policy | f1f8ae5 (demonstration pending) |
+| D5 | Dashboard presented the monitoring container's process count (1) as a host measurement; the host runs 184 processes | Scope declared per measurement in `/api/status` and shown on the dashboard label (REQ-017); see DD-1 | Fix D5 commit |
 
 Each fix has a regression test, except the deployment parts of D4, which are verified by demonstration.
 
@@ -102,3 +105,17 @@ Remaining gaps:
 | Build, test, deploy | `.github/workflows/ci.yml`, `Dockerfile` | CI run on every push |
 
 REQ-001 to REQ-012 and NFR-001 to NFR-005 keep their original IDs, with wording made measurable. Later IDs were added after tracing the requirements against the code and tests. Update this document whenever a requirement, test or deployment step changes.
+
+## 7. Design Decisions
+
+### DD-1: Scope of process and network measurements (D5)
+
+Context: the monitor runs in a container. CPU, memory and uptime come from /proc files that Linux does not namespace, and disk usage comes from the filesystem backing the container, so these describe the host. The process count and network counters are namespaced, so they describe only the monitoring container. The dashboard showed 1 process on a host running 184.
+
+Decision: declare the scope of every measurement (`MEASUREMENT_SCOPE`, returned by `/api/status` and shown on the dashboard) rather than widen the container's privileges.
+
+Alternatives:
+- `--pid=host`: would give a host-wide process count, but lets the container's root user see, and with Docker's default capabilities signal, every host process. Rejected because the monitor only reads and does not need that access.
+- Reading the host's /proc through a read-only mount: not evaluated.
+
+Consequence: the process count is a container count, labelled as such. If a host-wide count becomes a requirement, revisit this decision and record the new trade-off here.

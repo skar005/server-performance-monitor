@@ -12,6 +12,17 @@ from database import get_db
 
 app = FastAPI()
 
+# Where each measurement is taken from. Inside a container, CPU, memory,
+# disk and uptime describe the host; processes and network describe
+# only the container.
+MEASUREMENT_SCOPE = {
+    "cpu": "host",
+    "memory": "host",
+    "disk": "host",
+    "processes": "container",
+    "network": "container",
+}
+
 _last_net = psutil.net_io_counters()
 
 
@@ -137,6 +148,7 @@ def get_status():
         "memory": memory,
         "disk": disk,
         "processes": processes,
+        "scope": MEASUREMENT_SCOPE,
         "uptime": uptime
     })
 
@@ -353,7 +365,7 @@ def dashboard():
                     </div>
 
                     <div class="card">
-                        <div class="label">Processes</div>
+                        <div class="label">Processes (${d.scope.processes})</div>
                         <div class="value">${d.processes}</div>
                     </div>
 
