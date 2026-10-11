@@ -45,48 +45,60 @@ web interface.
 
 Status key: Verified = covered by an automated test or inspection;
 Demonstrated = shown on the live system; Partial = some evidence, with
-untested cases; Gap = nothing verifies it yet; Not met = known
-non-compliance (see section 5).
+untested cases remaining; Gap = nothing verifies it yet; Pending demo =
+implemented, awaiting demonstration on the deployed system.
 
 | ID | Method | Evidence today | Status |
 |---|---|---|---|
 | REQ-001 to 003 | Test | No direct test of `collect_metrics`; fields seen indirectly in `test_metrics_endpoint` | Partial |
 | REQ-004 | Test | `test_metric_can_be_stored` (database layer only) | Partial |
-| REQ-005 | Test | `test_cpu_above_threshold`, `test_cpu_below_threshold` | Verified |
-| REQ-006 | Test | `test_memory_below_threshold` only; no above-threshold case | Partial |
-| REQ-007 | Test | `test_disk_above_threshold` only; no below-threshold case | Partial |
-| REQ-008 | Test | Table creation tested; nothing checks that an alert row is written | Gap |
-| REQ-009 | Test | `test_status_endpoint` checks fields, not healthy/warning logic | Partial |
+| REQ-005 | Test | `test_cpu_above_threshold`, `test_cpu_below_threshold`, plus boundary cases in `test_status_agrees_with_alerting_rule` | Verified |
+| REQ-006 | Test | `test_memory_below_threshold`, plus above and at-threshold cases in `test_status_agrees_with_alerting_rule` | Verified |
+| REQ-007 | Test | `test_disk_above_threshold`, plus below and at-threshold cases in `test_status_agrees_with_alerting_rule` | Verified |
+| REQ-008 | Test | `test_alerts_endpoint_returns_full_alert_record` verifies stored fields; no test that `collect_metrics` writes the alert row | Partial |
+| REQ-009 | Test | `test_status_endpoint` (fields) and `test_status_agrees_with_alerting_rule` (healthy/warning at boundaries) | Verified |
 | REQ-010 | Test | `test_metrics_endpoint` checks fields, not the 100-row limit or ordering | Partial |
 | REQ-011 | Demonstration | Live dashboard screenshots | Demonstrated |
 | REQ-012 | Demonstration | Stress test raised a CPU alert on the live dashboard | Demonstrated |
 | REQ-013 | Test | None; interval is set in `app.py` | Gap |
 | REQ-014 | Inspection | Columns in schema; stored in `test_metric_can_be_stored` | Partial |
-| REQ-015 | Test | None; behaviour at the exact threshold is inconsistent (D1) | Not met |
-| REQ-016 | Test | `test_alerts_endpoint` checks these fields only if alerts exist; endpoint omits metric and value (D2) | Not met |
+| REQ-015 | Test | `test_status_agrees_with_alerting_rule` (six boundary cases) | Verified |
+| REQ-016 | Test | `test_alerts_endpoint_returns_full_alert_record` and `test_alerts_endpoint`; 10-row limit untested | Partial |
 | NFR-001 | Inspection | `database.py` uses a SQLite file | Verified |
-| NFR-002 | Inspection | Thresholds hard-coded in `app.py` and `alerting.py` (D1) | Not met |
-| NFR-003 | Test | `test_database.py` uses a temp DB; `test_api.py` does not (D3) | Not met |
+| NFR-002 | Test / inspection | Single definition verified by `test_thresholds_are_defined_in_one_place`; still changed by editing `alerting.py`, not externally configurable | Partial |
+| NFR-003 | Test | `tests/conftest.py` redirects to a temporary database; `test_tests_do_not_use_the_working_directory_database` | Verified |
 | NFR-004 | Inspection | `datetime.now(timezone.utc)` in `app.py`; no test | Partial |
 | NFR-005 | Test | Follows from REQ-010 (100 x 15 s = 25 min) | Partial |
-| NFR-006 | Demonstration | Deploy script recreates the container without a volume (D4) | Not met |
-| NFR-007 | Demonstration | No restart policy in the deploy script (D4) | Not met |
+| NFR-006 | Test / demonstration | Configurable path verified by `test_db_path_is_configurable_by_environment`; named volume `monitor-data` in deploy script; survival of a redeploy not yet demonstrated | Pending demo |
+| NFR-007 | Demonstration | `--restart unless-stopped` in deploy script; survival of a host reboot not yet demonstrated | Pending demo |
 | NFR-008 | Inspection | `needs: test` in `.github/workflows/ci.yml` | Verified |
 
-## 5. Defects and Gaps Found by Tracing
+## 5. Defects Found by Tracing
 
-- D1: `app.py` and `alerting.py` each define their own thresholds. Status uses `<` and alerting uses `>`, so at exactly the threshold the dashboard shows "warning" but no alert is raised.
-- D2: `/api/alerts` returns only timestamp and message. `test_alerts_endpoint` expects metric and value too, but only checks them when alerts exist, so it passes while the alerts table is empty.
-- D3: `test_api.py` imports `app`, which starts the scheduler and writes a reading to `metrics.db` in the working directory at import time.
-- D4: The deploy script runs `docker run` with no volume and no restart policy. Redeploying deletes measurement history, and a host reboot leaves the service stopped.
+| ID | Defect | Fix | Commit |
+|---|---|---|---|
+| D1 | Thresholds defined twice; status and alerting compared differently at the exact threshold | Single `THRESHOLDS` and shared `is_healthy` rule in `alerting.py` | 711ecfe |
+| D2 | `/api/alerts` dropped metric and value; its test passed only because the table was empty | Endpoint returns the full record; new test seeds an alert | 6d97ca3 |
+| D3 | Tests wrote to the working-directory database | `tests/conftest.py` redirects to a temporary database | acb62e3 |
+| D4 | Redeploy deleted measurement history; no restart after host reboot | Configurable database path, `monitor-data` volume, restart policy | f1f8ae5 (demonstration pending) |
+
+Each fix has a regression test, except the deployment parts of D4, which are verified by demonstration.
+
+Remaining gaps:
+
+- No direct test of `collect_metrics` (REQ-001 to 004, 013, 014, and the alert write path of REQ-008)
+- Row limits and ordering untested for history and alerts (REQ-010, REQ-016)
+- `test_alerts_endpoint` only checks fields when alerts exist, so its result depends on test order
+- Thresholds are not externally configurable (NFR-002)
 
 ## 6. Traceability
 
 | Area | Implementation | Tests |
 |---|---|---|
-| Alert decision | `alerting.py` | `tests/test_alerting.py` |
-| Persistence | `database.py` | `tests/test_database.py` |
-| Collection, API, dashboard | `app.py` | `tests/test_api.py` |
+| Alert decision and health rule | `alerting.py` | `tests/test_alerting.py`, `tests/test_threshold_consistency.py` |
+| Persistence and configuration | `database.py` | `tests/test_database.py`, `tests/test_db_path_config.py` |
+| Collection, API, dashboard | `app.py` | `tests/test_api.py`, `tests/test_alerts_api.py` |
+| Test isolation | `tests/conftest.py` | `tests/test_isolation.py` |
 | Build, test, deploy | `.github/workflows/ci.yml`, `Dockerfile` | CI run on every push |
 
 REQ-001 to REQ-012 and NFR-001 to NFR-005 keep their original IDs, with wording made measurable. Later IDs were added after tracing the requirements against the code and tests. Update this document whenever a requirement, test or deployment step changes.
